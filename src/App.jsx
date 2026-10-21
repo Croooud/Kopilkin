@@ -1746,17 +1746,30 @@ function useCoupleStore(onWriteError) {
   return { mode, data, meId, myPartnerId, readOnly, online, incoming, actions, goLocal, invite: null, inviteLink: null };
 }
 
-/* ═══════════════════════════ Хранилище в Telegram (Serverless) ═══════════════════════════
-   Внутри Telegram данные живут в базе бота (tgcloud/). Telegram сам проверяет, кто открыл
-   приложение. Телефоны раз в несколько секунд спрашивают, не изменилось ли что-то.        */
+/* ═══════════════════════════ Хранилище в Telegram ═══════════════════════════
+   Внутри Telegram данные живут на сервере (/api/kopilka, Netlify Functions + Blobs).
+   Сервер проверяет подпись Telegram (initData), поэтому знает, кто из вас открыл приложение.
+   Телефоны раз в несколько секунд спрашивают, не изменилось ли что-то.                       */
 
 const TG = typeof window !== "undefined" && window.Telegram ? window.Telegram.WebApp : null;
-const IN_TG = !!(TG && TG.initData && TG.Serverless && typeof TG.Serverless.call === "function");
-const tgCall = (name, input = {}) =>
-  new Promise((resolve, reject) => {
-    try { TG.Serverless.call("kopilka", { ...input, action: name }, (err, res) => (err ? reject(err) : resolve(res))); }
-    catch (e) { reject(e); }
-  });
+const IN_TG = !!(TG && typeof TG.initData === "string" && TG.initData.length > 0);
+const API_URL = "/api/kopilka";
+const tgCall = async (name, input = {}) => {
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-telegram-init-data": TG.initData },
+      body: JSON.stringify({ ...input, action: name }),
+    });
+  } catch (e) {
+    throw { type: "NETWORK" };
+  }
+  let body = null;
+  try { body = await res.json(); } catch (e) { /* пустой ответ */ }
+  if (!res.ok) throw { type: res.status === 401 ? "UNAUTHORIZED" : "ENDPOINT_ERROR", message: (body && body.error) || String(res.status) };
+  return body;
+};
 
 function useTelegramStore(onWriteError) {
   const [mode, setMode] = useState("loading");

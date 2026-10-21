@@ -3,30 +3,33 @@
 Общая копилка для пары в Telegram: цель и этапы, вклад каждого, челленджи и ИИ-помощник Огонёк,
 который помогает остановиться перед импульсивной покупкой. Бот: [@kopilkin_together_bot](https://t.me/kopilkin_together_bot).
 
-Работает на [Telegram Serverless](https://core.telegram.org/bots/serverless): Telegram сам хостит
-приложение, хранит данные в базе бота и проверяет, кто открыл Mini App. Отдельный сервер не нужен.
+Хостинг — Netlify: фронт отдаётся из `dist/`, сервер — Netlify Functions (`/api/kopilka`),
+данные — Netlify Blobs (встроенное хранилище, отдельная база не нужна).
 
 ## Деплой
 
-Каждый push в `main` запускает GitHub Actions (`.github/workflows/deploy.yml`): сборка
-`dist/index.html` → `tgcloud push` → `tgcloud migrate --safe`.
+1. **Netlify → Add new site → Import an existing project → GitHub → `Croooud/kopilkin`.**
+   Настройки сборки подтянутся из `netlify.toml` (команда `npm run build`, папка `dist`).
+2. **Site configuration → Environment variables → Add a variable:**
+   - `BOT_TOKEN` — токен бота из @BotFather (обязательно; им сервер проверяет, что запрос пришёл из Telegram).
+   - `BOT_USERNAME` — `kopilkin_together_bot` (необязательно, ускоряет ответ).
+   После добавления переменных: **Deploys → Trigger deploy**.
+3. **@BotFather → бот → Mini Apps → Main App:** вставить адрес сайта, например `https://kopilkin.netlify.app`.
+   При желании там же — Menu Button с тем же адресом.
+4. Открыть `https://t.me/kopilkin_together_bot?startapp`, пройти настройку и нажать «Отправить приглашение».
 
-Один раз:
+Дальше каждый push в `main` выкладывается автоматически.
 
-1. @BotFather → бот → **Serverless** → включить → **CLI Access** → скопировать токен
-   (вида `app<id>:<secret>`, это не токен бота).
-2. GitHub → репозиторий → **Settings → Secrets and variables → Actions → New repository secret**:
-   имя `TGCLOUD_TOKEN`, значение — токен из шага 1.
-3. **Actions → Deploy to Telegram → Run workflow** (или любой push в `main`).
-   В логе будет адрес приложения `https://app<id>.tgcloud.ai/`.
-4. @BotFather → бот → **Mini Apps** → Main App → вставить этот адрес.
-5. Открыть `https://t.me/kopilkin_together_bot?startapp`, пройти настройку и отправить партнёру приглашение.
+### Ответ на /start (необязательно)
 
-Приложение и сервер должны жить на одном адресе `app<id>.tgcloud.ai`: приложение обращается к серверу
-через `Telegram.WebApp.Serverless.call`, а Telegram отвечает на эти вызовы по `/api/` того же хоста.
-Поэтому выкладывать `dist/` на Vercel, Netlify или GitHub Pages отдельно не нужно — бэкенд там не заработает.
+Чтобы бот отвечал на /start кнопкой «Открыть копилку», один раз откройте в браузере
+(подставьте свой токен, адрес сайта и любую длинную строку вместо `SECRET`):
 
-Локально, если нужно: `npm install`, `npx tgcloud login`, `npm run deploy`.
+```
+https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<сайт>.netlify.app/api/telegram&secret_token=SECRET
+```
+
+и добавьте в Netlify переменную `WEBHOOK_SECRET=SECRET`.
 
 ## Структура
 
@@ -34,22 +37,24 @@
 src/App.jsx                    интерфейс (React, Tailwind, lucide-react) — один компонент
 web/index.html                 шаблон страницы: Telegram SDK, React, Tailwind и иконки из CDN
 scripts/build.mjs              src/App.jsx → dist/index.html (npm run build)
-dist/index.html                собранное приложение (коммитится, чтобы деплой был без сюрпризов)
-tgcloud/schema.js              таблицы: couples, members, entries
-tgcloud/endpoints/kopilka.js   весь сервер в одном endpoint: state, setup, join, addEntry,
-                               saveConfig, setChallenge, patchChallenge, reset (поле action)
-tgcloud/handlers/message.js    ответ на /start с кнопкой «Открыть копилку»
-tgcloud.jsonc                  настройки Serverless: приложение берётся из dist/
+dist/index.html                собранное приложение
+netlify/functions/kopilka.mjs  сервер: POST /api/kopilka { action } — state, setup, join, addEntry,
+                               saveConfig, setChallenge, patchChallenge, reset
+netlify/functions/telegram.mjs вебхук бота для /start (необязательный)
+netlify.toml                   настройки сборки и функций
 assets/                        Персик, Шалфей и Огонёк (256 px целиком и 128 px «лицо»)
 ```
 
 ## Как устроено
 
+- Каждый запрос несёт `Telegram.WebApp.initData`; сервер проверяет его подпись по `BOT_TOKEN`
+  (алгоритм из документации Telegram) и только так узнаёт пользователя. Без подписи — 401.
+- Одна копилка — один JSON-документ в Blobs (`couples/<код>`), плюс `members/<telegram id>`.
+  Запись идёт с проверкой etag и повтором, поэтому одновременные действия двух партнёров не теряются.
 - Создатель копилки становится первым партнёром. Ссылка-приглашение
-  `t.me/kopilkin_together_bot?startapp=КОД` открывает экран «Кто из вас вы?».
-- Один Telegram-аккаунт — одна копилка. Без кода чужой человек видит только пустую настройку.
-- Пока приложение открыто, телефоны раз в 4 секунды спрашивают сервер, не изменилось ли что-то
-  (`version` в таблице `couples`). Действия партнёра приходят уведомлением.
+  `t.me/kopilkin_together_bot?startapp=КОД` открывает экран «Кто из вас вы?». Занятое имя второй раз не выбрать.
+- Пока приложение открыто, телефоны раз в 4 секунды спрашивают сервер, не изменилось ли что-то (`version`).
+  Действия партнёра приходят уведомлением.
 - «Начать заново» в настройках удаляет копилку у обоих.
 - Вне Telegram (просто в браузере) приложение работает локально, без синхронизации.
 
