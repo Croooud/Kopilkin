@@ -766,7 +766,7 @@ function Onboarding({ onFinish }) {
           ))}
         </div>
         <div className="flex-1" />
-        {IN_TG && (
+        {IN_TG && API_URL && (
           <p className="text-[15px] text-slate-600 bg-white border border-slate-200 rounded-2xl px-4 py-3 mb-3">
             Партнёр уже завёл копилку? Тогда не начинайте новую, а откройте ссылку-приглашение от него.
           </p>
@@ -1753,7 +1753,16 @@ function useCoupleStore(onWriteError) {
 
 const TG = typeof window !== "undefined" && window.Telegram ? window.Telegram.WebApp : null;
 const IN_TG = !!(TG && typeof TG.initData === "string" && TG.initData.length > 0);
-const API_URL = "/api/kopilka";
+// Адрес сервера общей копилки. Берётся из <meta name="kopilkin-api"> в web/index.html.
+// Пусто — сервера нет (например, GitHub Pages): приложение работает, но данные только на этом телефоне.
+const API_URL = (() => {
+  try {
+    const m = document.querySelector('meta[name="kopilkin-api"]');
+    const v = m && m.content.trim();
+    if (v) return v;
+  } catch (e) { /* нет DOM */ }
+  return typeof location !== "undefined" && /github\.io$/.test(location.hostname) ? null : "/api/kopilka";
+})();
 const tgCall = async (name, input = {}) => {
   let res;
   try {
@@ -1879,7 +1888,7 @@ function useTelegramStore(onWriteError) {
   return { mode, data, meId, myPartnerId, readOnly: false, online: [], incoming, actions, goLocal: () => setMode("error"), invite, inviteLink };
 }
 
-const useStore = IN_TG ? useTelegramStore : useCoupleStore;
+const useStore = IN_TG && API_URL ? useTelegramStore : useCoupleStore;
 
 const shareInvite = (link, goalTitle) => {
   const text = `Давай копить на «${goalTitle}» вместе 🐷 Открой ссылку, и у нас будет общая копилка.`;
@@ -1980,7 +1989,7 @@ function SharingCard({ mode, config, members, myPartnerId, online, onLink, invit
       <section className="rounded-3xl bg-amber-50 border border-amber-100 p-5">
         <h2 className="text-[15px] font-bold text-amber-900">Пока только на этом устройстве</h2>
         <p className="mt-1 text-[15px] text-amber-900/80 leading-relaxed">
-          Общая копилка работает, когда приложение открыто в Claude. Здесь данные хранятся только в этом браузере.
+          Общая копилка заработает, когда подключим сервер для общих данных. Сейчас всё хранится только на этом телефоне.
         </p>
       </section>
     );
@@ -2301,7 +2310,7 @@ export default function App() {
           )}
           {mode === "local" && tab === "home" && (
             <button onClick={() => setTab("settings")} className="mb-4 w-full text-left rounded-2xl bg-slate-100 px-4 py-3 text-[13px] text-slate-600 transition-all active:scale-[0.98]">
-              Сейчас данные только на этом устройстве. Общая копилка работает, когда страница открыта в Claude.
+              Сейчас данные только на этом устройстве. Общая копилка заработает, когда подключим сервер.
             </button>
           )}
           {tab === "home" && mode === "tg" && store.inviteLink && other && !otherJoined && (

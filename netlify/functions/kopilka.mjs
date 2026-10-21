@@ -275,10 +275,19 @@ const actions = {
   },
 };
 
+// Приложение может жить на другом адресе (например, GitHub Pages), поэтому разрешаем CORS.
+// Это безопасно: пользователя определяет подпись Telegram в заголовке, а не cookie.
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "content-type, x-telegram-init-data",
+  "access-control-max-age": "86400",
+};
 const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS } });
 
 export default async function handler(req) {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
   if (!process.env.BOT_TOKEN) return json({ error: "NO_BOT_TOKEN" }, 500);
   const auth = verifyInitData(req.headers.get("x-telegram-init-data"), process.env.BOT_TOKEN);

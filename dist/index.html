@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light">
+<!-- Адрес сервера общей копилки, например https://kopilkin.netlify.app/api/kopilka.
+     Пусто — общих данных нет, каждый телефон хранит свою копилку (так работает на GitHub Pages). -->
+<meta name="kopilkin-api" content="">
 <title>Копилкин</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -580,7 +583,7 @@ function Onboarding({ onFinish }) {
                     React.createElement("div", { className: "text-[15px] font-semibold text-slate-900" }, t),
                     React.createElement("div", { className: "text-[15px] text-slate-500" }, s)))))),
             React.createElement("div", { className: "flex-1" }),
-            IN_TG && (React.createElement("p", { className: "text-[15px] text-slate-600 bg-white border border-slate-200 rounded-2xl px-4 py-3 mb-3" }, "\u041F\u0430\u0440\u0442\u043D\u0451\u0440 \u0443\u0436\u0435 \u0437\u0430\u0432\u0451\u043B \u043A\u043E\u043F\u0438\u043B\u043A\u0443? \u0422\u043E\u0433\u0434\u0430 \u043D\u0435 \u043D\u0430\u0447\u0438\u043D\u0430\u0439\u0442\u0435 \u043D\u043E\u0432\u0443\u044E, \u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0441\u044B\u043B\u043A\u0443-\u043F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043E\u0442 \u043D\u0435\u0433\u043E.")),
+            IN_TG && API_URL && (React.createElement("p", { className: "text-[15px] text-slate-600 bg-white border border-slate-200 rounded-2xl px-4 py-3 mb-3" }, "\u041F\u0430\u0440\u0442\u043D\u0451\u0440 \u0443\u0436\u0435 \u0437\u0430\u0432\u0451\u043B \u043A\u043E\u043F\u0438\u043B\u043A\u0443? \u0422\u043E\u0433\u0434\u0430 \u043D\u0435 \u043D\u0430\u0447\u0438\u043D\u0430\u0439\u0442\u0435 \u043D\u043E\u0432\u0443\u044E, \u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0441\u044B\u043B\u043A\u0443-\u043F\u0440\u0438\u0433\u043B\u0430\u0448\u0435\u043D\u0438\u0435 \u043E\u0442 \u043D\u0435\u0433\u043E.")),
             React.createElement("p", { className: "text-[13px] text-slate-400 mb-3" }, "\u0417\u0430\u0439\u043C\u0451\u0442 \u043F\u0430\u0440\u0443 \u043C\u0438\u043D\u0443\u0442. \u0412\u0441\u0451 \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u043C\u0435\u043D\u044F\u0442\u044C \u043F\u043E\u0442\u043E\u043C \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445."),
             React.createElement("button", { onClick: () => setStep(1), className: "w-full bg-emerald-500 text-white text-base font-semibold rounded-2xl py-4 transition-all active:scale-95 hover:bg-emerald-600" }, "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C \u043F\u043E\u0434 \u043D\u0430\u0441")));
     }
@@ -1355,7 +1358,18 @@ function useCoupleStore(onWriteError) {
    Телефоны раз в несколько секунд спрашивают, не изменилось ли что-то.                       */
 const TG = typeof window !== "undefined" && window.Telegram ? window.Telegram.WebApp : null;
 const IN_TG = !!(TG && typeof TG.initData === "string" && TG.initData.length > 0);
-const API_URL = "/api/kopilka";
+// Адрес сервера общей копилки. Берётся из <meta name="kopilkin-api"> в web/index.html.
+// Пусто — сервера нет (например, GitHub Pages): приложение работает, но данные только на этом телефоне.
+const API_URL = (() => {
+    try {
+        const m = document.querySelector('meta[name="kopilkin-api"]');
+        const v = m && m.content.trim();
+        if (v)
+            return v;
+    }
+    catch (e) { /* нет DOM */ }
+    return typeof location !== "undefined" && /github\.io$/.test(location.hostname) ? null : "/api/kopilka";
+})();
 const tgCall = async (name, input = {}) => {
     let res;
     try {
@@ -1497,7 +1511,7 @@ function useTelegramStore(onWriteError) {
     const inviteLink = meta.bot && meta.code ? `https://t.me/${meta.bot}?startapp=${meta.code}` : null;
     return { mode, data, meId, myPartnerId, readOnly: false, online: [], incoming, actions, goLocal: () => setMode("error"), invite, inviteLink };
 }
-const useStore = IN_TG ? useTelegramStore : useCoupleStore;
+const useStore = IN_TG && API_URL ? useTelegramStore : useCoupleStore;
 const shareInvite = (link, goalTitle) => {
     const text = `Давай копить на «${goalTitle}» вместе 🐷 Открой ссылку, и у нас будет общая копилка.`;
     const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
@@ -1573,7 +1587,7 @@ function SharingCard({ mode, config, members, myPartnerId, online, onLink, invit
     if (mode !== "cloud" && mode !== "tg") {
         return (React.createElement("section", { className: "rounded-3xl bg-amber-50 border border-amber-100 p-5" },
             React.createElement("h2", { className: "text-[15px] font-bold text-amber-900" }, "\u041F\u043E\u043A\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u044D\u0442\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435"),
-            React.createElement("p", { className: "mt-1 text-[15px] text-amber-900/80 leading-relaxed" }, "\u041E\u0431\u0449\u0430\u044F \u043A\u043E\u043F\u0438\u043B\u043A\u0430 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442, \u043A\u043E\u0433\u0434\u0430 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u043E\u0442\u043A\u0440\u044B\u0442\u043E \u0432 Claude. \u0417\u0434\u0435\u0441\u044C \u0434\u0430\u043D\u043D\u044B\u0435 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.")));
+            React.createElement("p", { className: "mt-1 text-[15px] text-amber-900/80 leading-relaxed" }, "\u041E\u0431\u0449\u0430\u044F \u043A\u043E\u043F\u0438\u043B\u043A\u0430 \u0437\u0430\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442, \u043A\u043E\u0433\u0434\u0430 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u043C \u0441\u0435\u0440\u0432\u0435\u0440 \u0434\u043B\u044F \u043E\u0431\u0449\u0438\u0445 \u0434\u0430\u043D\u043D\u044B\u0445. \u0421\u0435\u0439\u0447\u0430\u0441 \u0432\u0441\u0451 \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u044D\u0442\u043E\u043C \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0435.")));
     }
     return (React.createElement("section", { className: `${card} p-5` },
         React.createElement("div", { className: "flex items-center gap-2" },
@@ -1828,7 +1842,7 @@ function App() {
                     React.createElement(Plus, { size: 20 }))),
             React.createElement("main", { className: "px-4" },
                 readOnly && (React.createElement("div", { className: "mb-4 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3 text-[15px] text-amber-900" }, "\u0420\u0435\u0436\u0438\u043C \u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0430. \u0427\u0442\u043E\u0431\u044B \u0432\u043D\u043E\u0441\u0438\u0442\u044C \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u043F\u043E\u043F\u0440\u043E\u0441\u0438\u0442\u0435 \u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430 \u043F\u0440\u0438\u0433\u043B\u0430\u0441\u0438\u0442\u044C \u0432\u0430\u0441 \u0432 Claude \u0441 \u043F\u0440\u0430\u0432\u043E\u043C \u00AB\u0420\u0435\u0434\u0430\u043A\u0442\u043E\u0440\u00BB.")),
-                mode === "local" && tab === "home" && (React.createElement("button", { onClick: () => setTab("settings"), className: "mb-4 w-full text-left rounded-2xl bg-slate-100 px-4 py-3 text-[13px] text-slate-600 transition-all active:scale-[0.98]" }, "\u0421\u0435\u0439\u0447\u0430\u0441 \u0434\u0430\u043D\u043D\u044B\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u044D\u0442\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435. \u041E\u0431\u0449\u0430\u044F \u043A\u043E\u043F\u0438\u043B\u043A\u0430 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442, \u043A\u043E\u0433\u0434\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u043E\u0442\u043A\u0440\u044B\u0442\u0430 \u0432 Claude.")),
+                mode === "local" && tab === "home" && (React.createElement("button", { onClick: () => setTab("settings"), className: "mb-4 w-full text-left rounded-2xl bg-slate-100 px-4 py-3 text-[13px] text-slate-600 transition-all active:scale-[0.98]" }, "\u0421\u0435\u0439\u0447\u0430\u0441 \u0434\u0430\u043D\u043D\u044B\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 \u044D\u0442\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435. \u041E\u0431\u0449\u0430\u044F \u043A\u043E\u043F\u0438\u043B\u043A\u0430 \u0437\u0430\u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442, \u043A\u043E\u0433\u0434\u0430 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u043C \u0441\u0435\u0440\u0432\u0435\u0440.")),
                 tab === "home" && mode === "tg" && store.inviteLink && other && !otherJoined && (React.createElement("div", { className: "mb-4" },
                     React.createElement(InviteCard, { partner: other, link: store.inviteLink, goalTitle: config.goal.title }))),
                 titles[tab] && React.createElement("h1", { className: "text-2xl font-extrabold tracking-tight mb-4" }, titles[tab]),

@@ -6,36 +6,44 @@
 Хостинг — Netlify: фронт отдаётся из `dist/`, сервер — Netlify Functions (`/api/kopilka`),
 данные — Netlify Blobs (встроенное хранилище, отдельная база не нужна).
 
-## Деплой
+## Деплой на GitHub Pages
 
-1. **Netlify → Add new site → Import an existing project → GitHub → `Croooud/kopilkin`.**
-   Настройки сборки подтянутся из `netlify.toml` (команда `npm run build`, папка `dist`).
-2. **Site configuration → Environment variables → Add a variable:**
-   - `BOT_TOKEN` — токен бота из @BotFather (обязательно; им сервер проверяет, что запрос пришёл из Telegram).
-   - `BOT_USERNAME` — `kopilkin_together_bot` (необязательно, ускоряет ответ).
-   После добавления переменных: **Deploys → Trigger deploy**.
-3. **@BotFather → бот → Mini Apps → Main App:** вставить адрес сайта, например `https://kopilkin.netlify.app`.
-   При желании там же — Menu Button с тем же адресом.
-4. Открыть `https://t.me/kopilkin_together_bot?startapp`, пройти настройку и нажать «Отправить приглашение».
+Приложение собирается и выкладывается из этого репозитория (`.github/workflows/pages.yml`).
 
-Дальше каждый push в `main` выкладывается автоматически.
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions** (один раз).
+2. **Actions → GitHub Pages → Run workflow** (или любой push в `main`). Адрес: `https://croooud.github.io/kopilkin/`.
+3. @BotFather → бот → **Mini Apps → Main App** → вставить этот адрес.
+4. Открыть `https://t.me/kopilkin_together_bot?startapp`.
 
-### Ответ на /start (необязательно)
+GitHub Pages отдаёт только страницу — сервера у него нет. Поэтому на Pages копилка хранится
+в каждом телефоне отдельно (localStorage внутри Telegram).
 
-Чтобы бот отвечал на /start кнопкой «Открыть копилку», один раз откройте в браузере
-(подставьте свой токен, адрес сайта и любую длинную строку вместо `SECRET`):
+### Общая копилка на двоих
+
+Для общих данных нужен сервер — он уже написан: `netlify/functions/kopilka.mjs` (Netlify Functions + Blobs).
+Его можно развернуть из этого же репозитория на Netlify (переменная `BOT_TOKEN`, настройки в `netlify.toml`),
+а затем вписать адрес в `web/index.html`:
+
+```html
+<meta name="kopilkin-api" content="https://<сайт>.netlify.app/api/kopilka">
+```
+
+После push приложение на GitHub Pages начнёт ходить в этот сервер, и у пары появится одна общая копилка
+(CORS для этого уже разрешён). Если сайт целиком живёт на Netlify, мета-тег можно оставить пустым.
+
+### Ответ на /start (необязательно, только вместе с сервером)
 
 ```
 https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://<сайт>.netlify.app/api/telegram&secret_token=SECRET
 ```
 
-и добавьте в Netlify переменную `WEBHOOK_SECRET=SECRET`.
+и переменная `WEBHOOK_SECRET=SECRET` в Netlify.
 
 ## Структура
 
 ```
 src/App.jsx                    интерфейс (React, Tailwind, lucide-react) — один компонент
-web/index.html                 шаблон страницы: Telegram SDK, React, Tailwind и иконки из CDN
+web/index.html                 шаблон страницы: Telegram SDK, React, Tailwind, иконки; адрес сервера в meta kopilkin-api
 scripts/build.mjs              src/App.jsx → dist/index.html (npm run build)
 dist/index.html                собранное приложение
 netlify/functions/kopilka.mjs  сервер: POST /api/kopilka { action } — state, setup, join, addEntry,
@@ -56,7 +64,7 @@ assets/                        Персик, Шалфей и Огонёк (256 p
 - Пока приложение открыто, телефоны раз в 4 секунды спрашивают сервер, не изменилось ли что-то (`version`).
   Действия партнёра приходят уведомлением.
 - «Начать заново» в настройках удаляет копилку у обоих.
-- Вне Telegram (просто в браузере) приложение работает локально, без синхронизации.
+- Без сервера (GitHub Pages) или вне Telegram приложение работает локально, без синхронизации.
 
 ## Оформление «Тёплая керамика»
 
